@@ -1,0 +1,804 @@
+Ya yo tengo un código funcional del SGX controller que permite conectar todo entre celular y visualizador para acceder giroscopio y sensores y usa qr codes para conectarse rápido y ya verás que más 
+
+Entiendo puedes usarlo para establecer la base y llevarlo a algo completo con todos los efectos que mencionas y lo de spiderverse bien epic 
+
+Déjame saber si funciona eso and if yes, pues metele
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SGX Showcase | Spatialgineers</title>
+    
+    <!-- Tipografía técnica de la marca -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuración SGX Brand Guide -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Rajdhani', 'sans-serif'],
+                    },
+                    colors: {
+                        sgxBlue: '#32527B',
+                        sgxYellow: '#FDCC0D',
+                        sgxCopper: '#B87333',
+                        sgxGrey: '#888888',
+                        sgxDark: '#010409', // El Void
+                        sgxPanel: 'rgba(2, 8, 15, 0.75)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Librerías de Ingeniería (Three.js + PeerJS + QRCode) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Estilos de Interfaz SGX -->
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background-color: #010409; color: #FDCC0D;
+            background-image: radial-gradient(circle at center, #021124 0%, #010409 100%);
+            user-select: none;
+        }
+        #canvas-container { position: absolute; width: 100vw; height: 100vh; z-index: 0; }
+        
+        .sgx-panel {
+            background: rgba(2, 8, 15, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(50, 82, 123, 0.5);
+            border-left: 4px solid #FDCC0D;
+            border-radius: 1.5rem; /* Esquinas más curvas */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(50, 82, 123, 0.2);
+        }
+
+        .sgx-glow { text-shadow: 0 0 10px rgba(253, 204, 13, 0.6); }
+        .sgx-glow-blue { text-shadow: 0 0 10px rgba(50, 82, 123, 0.8); }
+
+        /* Controles de D-Pad */
+        .dpad-btn {
+            background: rgba(50, 82, 123, 0.2);
+            border: 1px solid #32527B;
+            color: #FDCC0D;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; cursor: pointer; transition: all 0.1s;
+            clip-path: polygon(20% 0, 80% 0, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0 80%, 0 20%);
+        }
+        .dpad-btn:active, .dpad-btn.active {
+            background: #FDCC0D; color: #010409;
+            box-shadow: 0 0 15px #FDCC0D; transform: scale(0.95);
+        }
+
+        /* Sliders de Ingeniería (Más compactos) */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 4px 0; height: 12px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 14px;
+            border-radius: 50%; background: #FDCC0D; cursor: pointer;
+            margin-top: -5px; box-shadow: 0 0 8px #FDCC0D;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer;
+            background: #32527B; border-radius: 2px;
+        }
+
+        /* Checkbox Custom (Curvo) */
+        .sgx-checkbox {
+            appearance: none; width: 16px; height: 16px;
+            border: 2px solid #32527B; background: transparent;
+            cursor: pointer; position: relative; border-radius: 6px;
+        }
+        .sgx-checkbox:checked { background: #FDCC0D; border-color: #FDCC0D; }
+
+        /* Color Picker Custom (Curvo y compacto) */
+        input[type="color"] {
+            -webkit-appearance: none; border: none; padding: 0;
+            width: 100%; height: 20px; cursor: pointer; background: transparent;
+            border-radius: 8px;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #32527B; border-radius: 8px; }
+
+        #ui-layer, #controller-ui, #loading-screen { display: none; z-index: 10; position: relative; }
+        
+        .spinner {
+            border: 3px solid rgba(50, 82, 123, 0.3); border-top: 3px solid #FDCC0D;
+            border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Scrollbar oculta para paneles */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #32527B; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas 3D -->
+    <div id="canvas-container"></div>
+
+    <!-- PANTALLA DE CARGA -->
+    <div id="loading-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-sgxDark z-50">
+        <img src="ICON YW.PNG" alt="SGX" class="w-24 mb-6 opacity-80" onerror="this.style.display='none'">
+        <div class="spinner mb-4"></div>
+        <h2 class="text-2xl font-bold tracking-widest sgx-glow uppercase">INGENIANDO IMAGINACIÓN...</h2>
+        <p id="loading-text" class="text-sm text-sgxBlue mt-2 font-semibold tracking-wider">Cargando Asset 3D</p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODO VISUALIZADOR (PANTALLA GIGANTE)       -->
+    <!-- ========================================== -->
+    <div id="ui-layer" class="w-full h-screen p-4 flex flex-col justify-between pointer-events-none">
+        
+        <!-- Top Bar -->
+        <div class="flex justify-between items-start">
+            <div class="sgx-panel p-3 pr-8 pointer-events-auto flex items-center gap-3">
+                <img src="ICON YW.PNG" alt="SGX" class="w-8 h-8" onerror="this.style.display='none'">
+                <div>
+                    <h1 class="text-2xl font-bold sgx-glow tracking-[0.1em] uppercase">SPATIALGINEERS</h1>
+                    <p class="text-[10px] tracking-widest text-sgxBlue uppercase font-bold">SGX.Showcase | Módulo XR</p>
+                </div>
+            </div>
+            <div id="connection-status" class="sgx-panel px-5 py-2 text-[10px] font-bold tracking-widest flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-sgxCopper animate-ping"></div>
+                <span>ESPERANDO TELEMETRÍA...</span>
+            </div>
+        </div>
+
+        <!-- Middle: Paneles Laterales -->
+        <div class="flex justify-between items-center w-full pointer-events-auto flex-grow my-2">
+            
+            <!-- Panel de Materiales (Visualizador - Compacto) -->
+            <div class="sgx-panel p-4 w-56 flex flex-col gap-2">
+                <h3 class="text-xs font-bold tracking-widest text-sgxBlue uppercase mb-1 border-b border-sgxBlue pb-1">Material Override</h3>
+                
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>ROUGHNESS</label><span id="val-r">0.2</span></div>
+                    <input type="range" id="sl-roughness" min="0" max="1" step="0.01" value="0.2">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>METALLIC</label><span id="val-m">0.8</span></div>
+                    <input type="range" id="sl-metallic" min="0" max="1" step="0.01" value="0.8">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>OPACITY</label><span id="val-o">1.0</span></div>
+                    <input type="range" id="sl-opacity" min="0" max="1" step="0.01" value="1.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>SCALE</label><span id="val-s">1.0x</span></div>
+                    <input type="range" id="sl-scale" min="0.1" max="3" step="0.05" value="1.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>BASE COLOR</label><span id="val-c">#FFFFFF</span></div>
+                    <input type="color" id="in-color" value="#ffffff">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1 text-sgxYellow"><label>EMISSION INT.</label><span id="val-ei">0.0</span></div>
+                    <input type="range" id="sl-emission-int" min="0" max="5" step="0.1" value="0.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1 text-sgxYellow"><label>EMISSION COLOR</label><span id="val-ec">#FDCC0D</span></div>
+                    <input type="color" id="in-emission-color" value="#fdcc0d">
+                </div>
+                <div class="flex items-center justify-between mt-1 bg-sgxBlue bg-opacity-20 p-2 rounded-xl">
+                    <label class="text-[10px] font-bold tracking-widest">WIREFRAME</label>
+                    <input type="checkbox" id="cb-wireframe" class="sgx-checkbox">
+                </div>
+            </div>
+
+            <!-- Panel Derecho (QR y D-Pad) -->
+            <div class="flex flex-col items-end gap-3 h-full justify-end">
+                <!-- QR Code -->
+                <div class="sgx-panel p-3 flex flex-col items-center">
+                    <div class="bg-white p-2 rounded-xl mb-2 border border-sgxBlue">
+                        <div id="qrcode"></div>
+                    </div>
+                    <p id="qr-instruction" class="font-bold text-[10px] tracking-widest text-center text-sgxYellow">ESCANEA PARA<br>CONTROL MÓVIL</p>
+                </div>
+                
+                <!-- D-Pad Local -->
+                <div class="sgx-panel p-3 flex flex-col items-center">
+                    <p class="text-[10px] mb-2 tracking-widest text-sgxBlue font-bold text-center">OVERRIDE ROTACIÓN</p>
+                    <div class="grid grid-cols-3 gap-1 w-24 h-24">
+                        <div></div><button class="dpad-btn" id="vis-btn-up">▲</button><div></div>
+                        <button class="dpad-btn" id="vis-btn-left">◀</button>
+                        <button class="dpad-btn text-[10px] font-bold text-sgxBlue hover:text-sgxYellow rounded-lg" id="vis-btn-reset">RST</button>
+                        <button class="dpad-btn" id="vis-btn-right">▶</button>
+                        <div></div><button class="dpad-btn" id="vis-btn-down">▼</button><div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="text-center pb-1 opacity-50 text-[10px] tracking-[0.2em] pointer-events-none text-sgxBlue">
+            SPATIALGINEERS LLC &copy; 2026 | ENGINEERING IMAGINATION, BUILDING REALITY
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODO CELULAR (CONTROLADOR REMOTO)          -->
+    <!-- ========================================== -->
+    <div id="controller-ui" class="w-full min-h-screen bg-sgxDark flex flex-col items-center p-4 overflow-y-auto">
+        
+        <div class="sgx-panel w-full p-4 flex items-center justify-center gap-3 mb-4 mt-2">
+            <img src="ICON YW.PNG" alt="SGX" class="w-8 h-8" onerror="this.style.display='none'">
+            <div class="text-left">
+                <h2 class="text-xl font-bold sgx-glow tracking-widest uppercase">SGX REMOTE</h2>
+                <p id="remote-status" class="text-[10px] text-sgxBlue font-bold tracking-widest">CONECTANDO...</p>
+            </div>
+        </div>
+        
+        <!-- Setup Inicial -->
+        <div id="setup-section" class="flex flex-col items-center justify-center w-full max-w-sm mt-8">
+            <p class="text-center text-sm mb-6 text-gray-400">Selecciona el modo de control espacial.</p>
+            
+            <button id="btn-activar" class="w-full bg-sgxYellow text-sgxDark font-bold text-base py-4 rounded-2xl mb-3 hover:scale-105 active:scale-95 transition shadow-[0_0_15px_#FDCC0D]">
+                ACTIVAR GIROSCOPIO 3D
+            </button>
+            <button id="btn-solo-manual" class="w-full border-2 border-sgxBlue text-sgxBlue font-bold text-sm py-3 rounded-2xl active:bg-sgxBlue active:text-white transition">
+                USAR SOLO BOTONES (D-PAD)
+            </button>
+        </div>
+
+        <!-- Panel de Control Activo -->
+        <div id="active-section" class="hidden flex-col items-center w-full max-w-sm gap-4 pb-8">
+            
+            <!-- Telemetría Giroscopio (Oculta si es solo manual) -->
+            <div id="gyro-telemetry" class="grid grid-cols-3 gap-2 w-full sgx-panel p-3 text-center">
+                <div><span class="text-[10px] text-sgxBlue font-bold block">PITCH</span><span id="val-x" class="font-mono text-sm sgx-glow">0</span></div>
+                <div class="border-l border-r border-sgxBlue border-opacity-30"><span class="text-[10px] text-sgxBlue font-bold block">ROLL</span><span id="val-y" class="font-mono text-sm sgx-glow">0</span></div>
+                <div><span class="text-[10px] text-sgxBlue font-bold block">YAW</span><span id="val-z" class="font-mono text-sm sgx-glow">0</span></div>
+            </div>
+
+            <!-- D-Pad Remoto -->
+            <div class="sgx-panel p-5">
+                <div class="grid grid-cols-3 gap-2 w-40 h-40">
+                    <div></div><button class="dpad-btn" id="ctrl-btn-up">▲</button><div></div>
+                    <button class="dpad-btn" id="ctrl-btn-left">◀</button>
+                    <button class="dpad-btn text-xs font-bold text-sgxBlue rounded-xl" id="ctrl-btn-reset">C</button>
+                    <button class="dpad-btn" id="ctrl-btn-right">▶</button>
+                    <div></div><button class="dpad-btn" id="ctrl-btn-down">▼</button><div></div>
+                </div>
+            </div>
+
+            <!-- Controles de Material Remotos (Compacto) -->
+            <div class="sgx-panel p-4 w-full flex flex-col gap-3">
+                <h3 class="text-xs font-bold tracking-widest text-sgxYellow uppercase mb-1 border-b border-sgxBlue pb-1">Material Override</h3>
+                
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>ROUGHNESS</label><span id="rem-val-r">0.2</span></div>
+                    <input type="range" id="rem-sl-roughness" min="0" max="1" step="0.01" value="0.2">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>METALLIC</label><span id="rem-val-m">0.8</span></div>
+                    <input type="range" id="rem-sl-metallic" min="0" max="1" step="0.01" value="0.8">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>OPACITY</label><span id="rem-val-o">1.0</span></div>
+                    <input type="range" id="rem-sl-opacity" min="0" max="1" step="0.01" value="1.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>SCALE</label><span id="rem-val-s">1.0x</span></div>
+                    <input type="range" id="rem-sl-scale" min="0.1" max="3" step="0.05" value="1.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>BASE COLOR</label><span id="rem-val-c">#FFFFFF</span></div>
+                    <input type="color" id="rem-in-color" value="#ffffff">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1 text-sgxYellow"><label>EMISSION INT.</label><span id="rem-val-ei">0.0</span></div>
+                    <input type="range" id="rem-sl-emission-int" min="0" max="5" step="0.1" value="0.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-1 text-sgxYellow"><label>EMISSION COLOR</label><span id="rem-val-ec">#FDCC0D</span></div>
+                    <input type="color" id="rem-in-emission-color" value="#fdcc0d">
+                </div>
+                <div class="flex items-center justify-between mt-1 bg-sgxBlue bg-opacity-20 p-2 rounded-xl">
+                    <label class="text-[10px] font-bold tracking-widest">WIREFRAME</label>
+                    <input type="checkbox" id="rem-cb-wireframe" class="sgx-checkbox">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MOTOR DE INGENIERÍA (LÓGICA CORE)        -->
+    <!-- ========================================== -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('modo');
+        const hostId = urlParams.get('id');
+
+        // Assets
+        const MODEL_URL = 'https://static.wixstatic.com/3d/fe81a7_cf1ed4e58d0048efa955f39d347a9466.glb';
+        const HDRI_URL = 'https://static.wixstatic.com/media/fe81a7_c9b56435fd4b4430ba78aa2c64492965~mv2.jpeg';
+
+        // P2P Configuración Robusta con STUN Servers para evitar bloqueos de NAT
+        const peerConfig = {
+            debug: 1,
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
+            }
+        };
+
+        // P2P State
+        let peer = null;
+        let dataConnection = null;
+
+        // Visual State
+        let sgxModelGroup = new THREE.Group();
+        let loadedMeshes = [];
+        let baseScaleMultiplier = 1; 
+        
+        // Material Params (Default SGX Style with Emission)
+        let matParams = { r: 0.2, m: 0.8, o: 1.0, s: 1.0, w: false, c: '#ffffff', ei: 0.0, ec: '#fdcc0d' };
+
+        // Input State
+        let manualMoves = { up: false, down: false, left: false, right: false };
+        let manualRotationOffset = { x: 0, y: 0 }; 
+        let usingGyro = false;
+        let targetGyroRot = new THREE.Euler(0, 0, 0);
+        let offsetAlpha = 0, offsetBeta = 0, offsetGamma = 0;
+
+        document.getElementById('loading-screen').style.display = 'flex';
+
+        // ==========================================
+        // MODO 1: SGX.SHOWCASE (PANTALLA GIGANTE)
+        // ==========================================
+        if (mode !== 'controlador') {
+            document.getElementById('ui-layer').style.display = 'flex';
+            document.getElementById('canvas-container').style.display = 'block';
+
+            // --- THREE.JS INIT ---
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x010409);
+            scene.fog = new THREE.FogExp2(0x010409, 0.04);
+
+            // --- CARGA DE HDRI / ENVIRONMENT MAP ---
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(HDRI_URL, function(texture) {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                texture.encoding = THREE.sRGBEncoding; 
+                scene.environment = texture; 
+            });
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 8);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // --- ILUMINACIÓN SGX BRANDING ---
+            const ambientLight = new THREE.AmbientLight(0x32527B, 0.8);
+            scene.add(ambientLight);
+
+            const neonLight = new THREE.DirectionalLight(0xFDCC0D, 2);
+            neonLight.position.set(5, 8, 5);
+            scene.add(neonLight);
+
+            const copperLight = new THREE.PointLight(0xB87333, 3, 20);
+            copperLight.position.set(-5, -2, -5);
+            scene.add(copperLight);
+
+            // Grid (The Void Blueprint)
+            const gridHelper = new THREE.GridHelper(50, 100, 0x32527B, 0x021124);
+            gridHelper.position.y = -2;
+            scene.add(gridHelper);
+
+            scene.add(sgxModelGroup);
+
+            // --- CARGA DE MODELO (.GLB) ---
+            const gltfLoader = new THREE.GLTFLoader();
+            gltfLoader.load(MODEL_URL, (gltf) => {
+                const model = gltf.scene;
+
+                // Centrado matemático
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.sub(center);
+
+                // Escala fluida
+                const size = box.getSize(new THREE.Vector3()).length();
+                baseScaleMultiplier = 5 / size; 
+                model.scale.set(baseScaleMultiplier, baseScaleMultiplier, baseScaleMultiplier);
+
+                // Almacenar meshes y aplicar material inicial SGX
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        loadedMeshes.push(child);
+                        if (child.material) {
+                            child.material.transparent = true;
+                            child.material.needsUpdate = true;
+                        }
+                    }
+                });
+
+                sgxModelGroup.add(model);
+                applyMaterials(); 
+                document.getElementById('loading-screen').style.display = 'none';
+
+            }, (xhr) => {
+                const pct = Math.round((xhr.loaded / xhr.total) * 100);
+                document.getElementById('loading-text').innerText = `DESCARGANDO ASSET... ${pct || 0}%`;
+            }, (err) => {
+                document.getElementById('loading-text').innerText = "ERROR DE SISTEMA. Revisa la URL.";
+                document.getElementById('loading-text').classList.replace('text-sgxBlue', 'text-red-500');
+            });
+
+            // --- LÓGICA DE ACTUALIZACIÓN DE MATERIALES ---
+            const uiR = document.getElementById('sl-roughness');
+            const uiM = document.getElementById('sl-metallic');
+            const uiO = document.getElementById('sl-opacity');
+            const uiS = document.getElementById('sl-scale');
+            const uiW = document.getElementById('cb-wireframe');
+            const uiC = document.getElementById('in-color');
+            const uiEI = document.getElementById('sl-emission-int');
+            const uiEC = document.getElementById('in-emission-color');
+
+            function applyMaterials() {
+                // UI Text Updates
+                document.getElementById('val-r').innerText = matParams.r.toFixed(2);
+                document.getElementById('val-m').innerText = matParams.m.toFixed(2);
+                document.getElementById('val-o').innerText = matParams.o.toFixed(2);
+                document.getElementById('val-s').innerText = matParams.s.toFixed(2) + 'x';
+                document.getElementById('val-c').innerText = matParams.c.toUpperCase();
+                document.getElementById('val-ei').innerText = matParams.ei.toFixed(2);
+                document.getElementById('val-ec').innerText = matParams.ec.toUpperCase();
+                
+                // Actualizar sliders locales
+                uiR.value = matParams.r; uiM.value = matParams.m; 
+                uiO.value = matParams.o; uiS.value = matParams.s;
+                uiW.checked = matParams.w; uiC.value = matParams.c;
+                uiEI.value = matParams.ei; uiEC.value = matParams.ec;
+
+                // Escala global
+                const currentScale = baseScaleMultiplier * matParams.s;
+                sgxModelGroup.children.forEach(c => c.scale.set(currentScale, currentScale, currentScale));
+
+                // Materiales
+                loadedMeshes.forEach(mesh => {
+                    if(mesh.material) {
+                        mesh.material.color.set(matParams.c);
+                        mesh.material.roughness = matParams.r;
+                        mesh.material.metalness = matParams.m;
+                        mesh.material.opacity = matParams.o;
+                        mesh.material.transparent = matParams.o < 1.0;
+                        mesh.material.wireframe = matParams.w;
+                        
+                        // Control de Emisión
+                        mesh.material.emissive.set(matParams.ec);
+                        // Si está en wireframe y la emisión es 0, damos un brillo por defecto, si no, respeta el override de emisión del usuario
+                        if(matParams.w && matParams.ei === 0) {
+                            mesh.material.emissiveIntensity = 0.2; 
+                        } else {
+                            mesh.material.emissiveIntensity = matParams.ei;
+                        }
+                        
+                        mesh.material.needsUpdate = true;
+                    }
+                });
+            }
+
+            // Listeners Locales de Pantalla
+            const handleLocalUI = () => {
+                matParams.r = parseFloat(uiR.value);
+                matParams.m = parseFloat(uiM.value);
+                matParams.o = parseFloat(uiO.value);
+                matParams.s = parseFloat(uiS.value);
+                matParams.w = uiW.checked;
+                matParams.c = uiC.value;
+                matParams.ei = parseFloat(uiEI.value);
+                matParams.ec = uiEC.value;
+                
+                applyMaterials();
+                if(dataConnection && dataConnection.open) {
+                    dataConnection.send({ type: 'matSync', params: matParams });
+                }
+            };
+            [uiR, uiM, uiO, uiS, uiW, uiC, uiEI, uiEC].forEach(el => el.addEventListener('input', handleLocalUI));
+
+            // --- RENDER LOOP & ROTACIÓN ---
+            const ROT_SPEED = 0.05;
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                if (manualMoves.up) manualRotationOffset.x -= ROT_SPEED;
+                if (manualMoves.down) manualRotationOffset.x += ROT_SPEED;
+                if (manualMoves.left) manualRotationOffset.y -= ROT_SPEED;
+                if (manualMoves.right) manualRotationOffset.y += ROT_SPEED;
+
+                if (!usingGyro) {
+                    sgxModelGroup.rotation.x += (manualRotationOffset.x - sgxModelGroup.rotation.x) * 0.1;
+                    sgxModelGroup.rotation.y += (manualRotationOffset.y - sgxModelGroup.rotation.y) * 0.1;
+                    if(!manualMoves.up && !manualMoves.down && !manualMoves.left && !manualMoves.right) {
+                        manualRotationOffset.y += 0.003; 
+                    }
+                } else {
+                    let finalX = targetGyroRot.x + manualRotationOffset.x;
+                    let finalY = targetGyroRot.y + manualRotationOffset.y;
+                    sgxModelGroup.rotation.x += (finalX - sgxModelGroup.rotation.x) * 0.1;
+                    sgxModelGroup.rotation.y += (finalY - sgxModelGroup.rotation.y) * 0.1;
+                    sgxModelGroup.rotation.z += (targetGyroRot.z - sgxModelGroup.rotation.z) * 0.1;
+                }
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Input Teclado/D-Pad Local
+            const setupLocalPad = (id, dir) => {
+                const btn = document.getElementById(id);
+                if(!btn) return;
+                const start = (e) => { e.preventDefault(); manualMoves[dir] = true; btn.classList.add('bg-sgxYellow', 'text-black'); };
+                const stop = (e) => { e.preventDefault(); manualMoves[dir] = false; btn.classList.remove('bg-sgxYellow', 'text-black'); };
+                btn.addEventListener('mousedown', start); btn.addEventListener('touchstart', start);
+                btn.addEventListener('mouseup', stop); btn.addEventListener('mouseleave', stop); btn.addEventListener('touchend', stop);
+            };
+            setupLocalPad('vis-btn-up', 'up'); setupLocalPad('vis-btn-down', 'down');
+            setupLocalPad('vis-btn-left', 'left'); setupLocalPad('vis-btn-right', 'right');
+            document.getElementById('vis-btn-reset').addEventListener('click', () => { manualRotationOffset = {x:0, y:0}; });
+
+            // --- PEERJS HOST ---
+            peer = new Peer(peerConfig); 
+            const statusDisplay = document.getElementById('connection-status');
+            
+            peer.on('open', (id) => {
+                statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-sgxYellow animate-pulse"></div> <span>ESCANEA EL QR</span>';
+                const cleanUrl = window.location.href.split('?')[0].split('#')[0];
+                const remoteUrl = `${cleanUrl}?modo=controlador&id=${id}`;
+                
+                new QRCode(document.getElementById("qrcode"), {
+                    text: remoteUrl, width: 100, height: 100, // Más compacto
+                    colorDark : "#32527B", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.L
+                });
+            });
+
+            peer.on('connection', (conn) => {
+                dataConnection = conn;
+                statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-sgxYellow animate-pulse"></div> <span class="text-sgxYellow">NEGOCIANDO P2P...</span>';
+                
+                conn.on('open', () => {
+                    statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div> <span class="text-green-500">ENLACE ACTIVO</span>';
+                    document.getElementById('qr-instruction').innerText = "SISTEMA REMOTO CONECTADO";
+                });
+
+                conn.on('data', (data) => {
+                    // Protocolo Handshake: El celular avisa que ya puede recibir data
+                    if (data.type === 'remoteReady') {
+                        statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div> <span class="text-green-500">ENLACE ACTIVO</span>';
+                        document.getElementById('qr-instruction').innerText = "SISTEMA REMOTO CONECTADO";
+                        conn.send({ type: 'matSync', params: matParams });
+                    }
+                    else if(data.type === 'orientation') {
+                        usingGyro = true;
+                        const d2r = Math.PI / 180;
+                        targetGyroRot.x = data.beta * d2r; 
+                        targetGyroRot.y = data.gamma * d2r; 
+                        targetGyroRot.z = data.alpha * d2r; 
+                    }
+                    else if (data.type === 'pad') { manualMoves[data.dir] = data.active; }
+                    else if (data.type === 'reset') { manualRotationOffset = {x: 0, y: 0}; targetGyroRot.set(0,0,0); }
+                    else if (data.type === 'matUpdate') { matParams = data.params; applyMaterials(); }
+                });
+
+                conn.on('close', () => {
+                    usingGyro = false; dataConnection = null;
+                    statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-sgxCopper animate-ping"></div> <span>ESPERANDO...</span>';
+                    document.getElementById('qr-instruction').innerHTML = "ESCANEA PARA<br>CONTROL MÓVIL";
+                });
+            });
+        } 
+        
+        // ==========================================
+        // MODO 2: SGX REMOTE (CELULAR)
+        // ==========================================
+        else if (mode === 'controlador' && hostId) {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('controller-ui').style.display = 'flex';
+
+            const statusText = document.getElementById('remote-status');
+            const setupSec = document.getElementById('setup-section');
+            const activeSec = document.getElementById('active-section');
+            const btnActivar = document.getElementById('btn-activar');
+            const btnSoloManual = document.getElementById('btn-solo-manual');
+            let lastOri = { a:0, b:0, c:0 };
+
+            btnActivar.addEventListener('click', (e) => {
+                btnActivar.innerText = "SOLICITANDO PERMISOS...";
+                btnActivar.disabled = true;
+                btnSoloManual.disabled = true;
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(state => { 
+                            if (state === 'granted') { initRemote(true); } 
+                            else { alert("Permiso denegado. Se iniciará en modo manual."); initRemote(false); }
+                        })
+                        .catch(err => { 
+                            console.error(err);
+                            initRemote(false); // Fallback automático si falla el request
+                        });
+                } else { initRemote(true); }
+            });
+            
+            btnSoloManual.addEventListener('click', () => {
+                btnSoloManual.innerText = "INICIANDO MODO MANUAL...";
+                btnActivar.disabled = true;
+                btnSoloManual.disabled = true;
+                initRemote(false);
+            });
+
+            function initRemote(useGyro) {
+                statusText.innerText = "ESTABLECIENDO ENLACE P2P...";
+                btnActivar.innerText = "CONECTANDO AL HOST...";
+                btnSoloManual.innerText = "CONECTANDO AL HOST...";
+                
+                peer = new Peer(peerConfig);
+                let isConnected = false;
+                
+                // Timeout de 15 segundos para dar tiempo a la red celular de recolectar ICE candidates
+                let connectionTimeout = setTimeout(() => {
+                    if (!isConnected) {
+                        alert("La conexión P2P está tardando demasiado. Verifica tu conexión a internet o intenta usar datos móviles (LTE/5G).");
+                        btnActivar.innerText = "ACTIVAR GIROSCOPIO 3D";
+                        btnSoloManual.innerText = "USAR SOLO BOTONES (D-PAD)";
+                        btnActivar.disabled = false;
+                        btnSoloManual.disabled = false;
+                        statusText.innerText = "ERROR DE CONEXIÓN";
+                    }
+                }, 15000);
+
+                const onConnectionEstablished = () => {
+                    if (isConnected) return; // Evitar doble ejecución
+                    isConnected = true;
+                    clearTimeout(connectionTimeout); 
+                    
+                    // Handshake Protocol: El celular le dice a la pantalla "Ya estoy escuchando, envíame los materiales"
+                    if (dataConnection && dataConnection.open) {
+                        dataConnection.send({ type: 'remoteReady' });
+                    }
+                    
+                    setupSec.style.display = 'none'; 
+                    activeSec.style.display = 'flex';
+                    statusText.innerText = "SISTEMA EN LÍNEA"; 
+                    statusText.classList.add('text-green-500');
+                    
+                    if(useGyro) {
+                        window.addEventListener('deviceorientation', (e) => {
+                            let a = (e.alpha||0)-offsetAlpha, b = (e.beta||0)-offsetBeta, c = (e.gamma||0)-offsetGamma;
+                            lastOri = { a:e.alpha||0, b:e.beta||0, c:e.gamma||0 };
+                            document.getElementById('val-x').innerText = b.toFixed(0);
+                            document.getElementById('val-y').innerText = c.toFixed(0);
+                            document.getElementById('val-z').innerText = a.toFixed(0);
+                            if (dataConnection && dataConnection.open) {
+                                dataConnection.send({ type: 'orientation', alpha: a, beta: b, gamma: c });
+                            }
+                        });
+                    } else {
+                        document.getElementById('gyro-telemetry').style.display = 'none';
+                    }
+                };
+
+                peer.on('open', () => {
+                    // Forzar canal confiable para atravesar firewalls
+                    dataConnection = peer.connect(hostId, { reliable: true });
+                    
+                    dataConnection.on('open', onConnectionEstablished);
+                    
+                    dataConnection.on('data', (data) => {
+                        // Doble Check por si el evento 'open' falla o llega tarde
+                        onConnectionEstablished();
+                        
+                        if(data.type === 'matSync') { syncRemoteUI(data.params); }
+                    });
+                });
+                
+                peer.on('error', (err) => {
+                    console.error("PeerJS Error:", err);
+                    if (!isConnected) {
+                        clearTimeout(connectionTimeout);
+                        alert("Fallo de red P2P. El Firewall puede estar bloqueando la conexión.");
+                        btnActivar.disabled = false; btnSoloManual.disabled = false;
+                        btnActivar.innerText = "REINTENTAR"; btnSoloManual.innerText = "REINTENTAR";
+                        statusText.innerText = "ERROR DE CONEXIÓN";
+                    }
+                });
+            }
+
+            // D-Pad Celular
+            const sRBtn = (id, dir) => {
+                const b = document.getElementById(id);
+                const s = (act) => {
+                    act ? b.classList.add('bg-sgxYellow', 'text-black') : b.classList.remove('bg-sgxYellow', 'text-black');
+                    if(dataConnection && dataConnection.open) dataConnection.send({ type: 'pad', dir: dir, active: act });
+                };
+                b.addEventListener('touchstart', (e)=>{e.preventDefault(); s(true);});
+                b.addEventListener('touchend', (e)=>{e.preventDefault(); s(false);});
+                b.addEventListener('mousedown', (e)=>{e.preventDefault(); s(true);});
+                b.addEventListener('mouseup', (e)=>{e.preventDefault(); s(false);});
+                b.addEventListener('mouseleave', (e)=>{e.preventDefault(); s(false);});
+            };
+            sRBtn('ctrl-btn-up', 'up'); sRBtn('ctrl-btn-down', 'down');
+            sRBtn('ctrl-btn-left', 'left'); sRBtn('ctrl-btn-right', 'right');
+            
+            document.getElementById('ctrl-btn-reset').addEventListener('click', () => {
+                offsetAlpha=lastOri.a; offsetBeta=lastOri.b; offsetGamma=lastOri.c;
+                if(dataConnection && dataConnection.open) dataConnection.send({ type: 'reset' });
+                if(navigator.vibrate) navigator.vibrate(50);
+            });
+
+            // Lógica Materiales Celular
+            const rUI = {
+                r: document.getElementById('rem-sl-roughness'),
+                m: document.getElementById('rem-sl-metallic'),
+                o: document.getElementById('rem-sl-opacity'),
+                s: document.getElementById('rem-sl-scale'),
+                w: document.getElementById('rem-cb-wireframe'),
+                c: document.getElementById('rem-in-color'),
+                ei: document.getElementById('rem-sl-emission-int'),
+                ec: document.getElementById('rem-in-emission-color')
+            };
+            const rVal = { 
+                r: 'rem-val-r', m: 'rem-val-m', o: 'rem-val-o', s: 'rem-val-s', 
+                c: 'rem-val-c', ei: 'rem-val-ei', ec: 'rem-val-ec' 
+            };
+
+            function syncRemoteUI(p) {
+                rUI.r.value = p.r; rUI.m.value = p.m; rUI.o.value = p.o; rUI.s.value = p.s; 
+                rUI.w.checked = p.w; rUI.c.value = p.c; rUI.ei.value = p.ei; rUI.ec.value = p.ec;
+                
+                document.getElementById(rVal.r).innerText = p.r.toFixed(2);
+                document.getElementById(rVal.m).innerText = p.m.toFixed(2);
+                document.getElementById(rVal.o).innerText = p.o.toFixed(2);
+                document.getElementById(rVal.s).innerText = p.s.toFixed(2) + 'x';
+                document.getElementById(rVal.c).innerText = p.c.toUpperCase();
+                document.getElementById(rVal.ei).innerText = p.ei.toFixed(2);
+                document.getElementById(rVal.ec).innerText = p.ec.toUpperCase();
+            }
+
+            const sendMatUpdate = () => {
+                const p = {
+                    r: parseFloat(rUI.r.value), m: parseFloat(rUI.m.value),
+                    o: parseFloat(rUI.o.value), s: parseFloat(rUI.s.value), 
+                    w: rUI.w.checked, c: rUI.c.value, 
+                    ei: parseFloat(rUI.ei.value), ec: rUI.ec.value
+                };
+                syncRemoteUI(p); 
+                if(dataConnection && dataConnection.open) {
+                    dataConnection.send({ type: 'matUpdate', params: p });
+                }
+            };
+
+            Object.values(rUI).forEach(el => el.addEventListener('input', sendMatUpdate));
+        }
+    </script>
+</body>
+</html>
