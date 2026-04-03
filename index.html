@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SGX Visualizer | Dimension Engine</title>
+    <title>SGX Visualizer | Dimension Engine V2</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,19 +29,29 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; background-color: #010409; color: #FDCC0D; user-select: none; }
+        body { margin: 0; overflow: hidden; background-color: #010409; color: #FDCC0D; user-select: none; touch-action: pan-y; }
         #canvas-container { position: absolute; width: 100vw; height: 100vh; z-index: 0; }
         
-        .sgx-panel { background: rgba(2, 8, 15, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(50, 82, 123, 0.5); border-left: 4px solid #FDCC0D; border-radius: 1rem; }
+        .sgx-panel { background: rgba(2, 8, 15, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(50, 82, 123, 0.5); border-left: 4px solid #FDCC0D; border-radius: 1rem; }
         .sgx-glow { text-shadow: 0 0 10px rgba(253, 204, 13, 0.6); }
         
-        /* Controles móviles optimizados */
+        /* Controles móviles de alta precisión */
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; height: 16px; margin: 5px 0; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #FDCC0D; box-shadow: 0 0 10px #FDCC0D; cursor: pointer; margin-top: -8px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #FDCC0D; box-shadow: 0 0 10px #FDCC0D; cursor: pointer; margin-top: -7px; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #32527B; border-radius: 2px; }
         
-        .effect-btn { background: rgba(50, 82, 123, 0.2); border: 1px solid #32527B; padding: 8px; font-size: 10px; font-weight: bold; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: white; }
+        input[type="color"] { -webkit-appearance: none; border: none; padding: 0; width: 100%; height: 24px; cursor: pointer; background: transparent; border-radius: 8px; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #32527B; border-radius: 8px; }
+
+        /* Botones de efectos en grid scrolleable */
+        .effect-btn { min-width: 70px; flex-shrink: 0; background: rgba(50, 82, 123, 0.2); border: 1px solid #32527B; padding: 10px 4px; font-size: 10px; font-weight: bold; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: white; display: flex; align-items: center; justify-content: center; line-height: 1.1; }
         .effect-btn.active { background: #FDCC0D; color: #010409; box-shadow: 0 0 10px rgba(253,204,13,0.5); border-color: #FDCC0D; }
+
+        /* Ocultar scrollbars pero mantener funcionalidad */
+        ::-webkit-scrollbar { height: 4px; width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #32527B; border-radius: 4px; }
 
         #media-feed { display: none; }
     </style>
@@ -49,21 +59,18 @@
 <body>
 
     <div id="canvas-container"></div>
-    
     <video id="media-feed" src="https://video.wixstatic.com/video/fe81a7_056f6ceeb6744f94991016499cfd95ae/1080p/mp4/file.mp4" loop autoplay muted playsinline crossorigin="anonymous"></video>
     <canvas id="texture-canvas" style="display:none;"></canvas>
 
     <div id="ui-layer" class="hidden w-full h-screen p-6 flex-col justify-between pointer-events-none absolute inset-0 z-10">
-        
         <div class="flex justify-between items-start">
-            <div class="sgx-panel p-4 pointer-events-auto">
+            <div class="sgx-panel p-4 pointer-events-auto shadow-2xl">
                 <h1 class="text-2xl font-bold sgx-glow tracking-[0.1em] uppercase">SPATIALGINEERS</h1>
                 <p class="text-[10px] tracking-widest text-sgxBlue font-bold" id="host-status">VFX ENGINE: ESPERANDO ENLACE P2P...</p>
             </div>
         </div>
-
         <div class="flex justify-end items-end w-full">
-            <div class="sgx-panel p-4 flex flex-col items-center shadow-2xl pointer-events-auto">
+            <div class="sgx-panel p-4 flex flex-col items-center shadow-2xl pointer-events-auto border-r-4 border-r-sgxYellow border-l-0">
                 <div class="bg-white p-2 rounded-lg mb-2">
                     <div id="qrcode"></div>
                 </div>
@@ -74,22 +81,22 @@
 
     <div id="controller-ui" class="hidden w-full h-[100dvh] bg-sgxDark flex-col relative overflow-hidden">
         
-        <div class="w-full h-[55%] bg-black relative">
+        <div class="w-full h-[55dvh] bg-black relative flex-shrink-0 border-b-2 border-sgxBlue">
             <video id="local-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
-            <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] px-2 py-1 rounded font-bold animate-pulse" id="live-indicator" style="display:none;">LIVE P2P</div>
+            <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] px-3 py-1 rounded font-bold animate-pulse shadow-[0_0_10px_red]" id="live-indicator" style="display:none;">LIVE P2P</div>
             
-            <div id="setup-section" class="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
-                <button id="btn-activar" class="bg-sgxYellow text-sgxDark font-bold text-lg px-8 py-4 rounded-full hover:scale-105 active:scale-95 transition shadow-[0_0_20px_#FDCC0D]">
+            <div id="setup-section" class="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md z-20">
+                <button id="btn-activar" class="bg-sgxYellow text-sgxDark font-bold text-lg px-8 py-4 rounded-xl hover:scale-105 active:scale-95 transition shadow-[0_0_30px_rgba(253,204,13,0.4)]">
                     INICIAR TRANSMISIÓN
                 </button>
             </div>
         </div>
 
-        <div class="w-full h-[45%] sgx-panel rounded-t-3xl -mt-6 z-10 p-5 flex flex-col gap-4 overflow-y-auto">
+        <div class="w-full h-[45dvh] bg-sgxDark z-10 p-4 flex flex-col gap-3 overflow-y-auto">
             
             <div>
-                <h3 class="text-[10px] font-bold tracking-widest text-sgxYellow uppercase mb-2">Motor de Efectos (Ubershader)</h3>
-                <div class="grid grid-cols-5 gap-2" id="effect-grid">
+                <h3 class="text-[10px] font-bold tracking-widest text-sgxBlue uppercase mb-2">MOTOR UBERSHADER</h3>
+                <div class="flex gap-2 overflow-x-auto pb-2" id="effect-list">
                     <div class="effect-btn active" data-mode="0">SPIDER<br>VERSE</div>
                     <div class="effect-btn" data-mode="1">DATA<br>MOSH</div>
                     <div class="effect-btn" data-mode="2">FLUID<br>LIQUIFY</div>
@@ -103,16 +110,26 @@
                 </div>
             </div>
 
-            <div class="flex-grow flex flex-col justify-center gap-3">
+            <div class="sgx-panel p-4 flex flex-col gap-3">
                 <div>
-                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>STOP-MOTION (FPS)</label><span id="val-fps">12</span></div>
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>STOP-MOTION (FPS)</label><span id="val-fps" class="text-sgxYellow">12</span></div>
                     <input type="range" id="sl-fps" min="2" max="60" step="1" value="12">
                 </div>
                 <div>
-                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>INTENSIDAD / ABERRACIÓN</label><span id="val-int">0.5</span></div>
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>INTENSIDAD / FX AMT</label><span id="val-int" class="text-sgxYellow">0.5</span></div>
                     <input type="range" id="sl-int" min="0" max="1" step="0.01" value="0.5">
                 </div>
+                <div>
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>ESCALA / DENSIDAD</label><span id="val-scale" class="text-sgxYellow">1.0</span></div>
+                    <input type="range" id="sl-scale" min="0.1" max="5" step="0.1" value="1.0">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>TINT / EMISSION COLOR</label><span id="val-c" class="text-sgxYellow">#FDCC0D</span></div>
+                    <input type="color" id="in-color" value="#fdcc0d">
+                </div>
             </div>
+            
+            <div class="h-4 w-full flex-shrink-0"></div>
         </div>
     </div>
 
@@ -125,9 +142,20 @@
         let peer = null;
         let dataConnection = null;
         
-        let vfxState = { mode: 0, fps: 12, intensity: 0.5 };
+        // Estado inicial del motor
+        let vfxState = { mode: 0, fps: 12, intensity: 0.5, scale: 1.0, color: '#fdcc0d' };
 
-        // --- UBERSHADER: 10 Efectos Matemáticos en un solo pase ---
+        // Helper para convertir HEX a RGB normalizado (0.0 a 1.0) para GLSL
+        function hexToRgb(hex) {
+            let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 255.0,
+                g: parseInt(result[2], 16) / 255.0,
+                b: parseInt(result[3], 16) / 255.0
+            } : { r: 1, g: 1, b: 1 };
+        }
+
+        // --- UBERSHADER GLSL ---
         const vertexShader = `
             varying vec2 vUv;
             void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -137,48 +165,52 @@
             uniform sampler2D tDiffuse;
             uniform int u_mode;
             uniform float u_intensity;
+            uniform float u_scale;
+            uniform vec3 u_color;
             uniform float u_time;
             varying vec2 vUv;
 
-            // Función Helper RGB a Luma
             float getLuma(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.114)); }
 
             void main() {
                 vec2 uv = vUv;
                 vec4 texColor = texture2D(tDiffuse, uv);
                 vec3 finalColor = texColor.rgb;
+                float luma = getLuma(finalColor);
 
-                // 0. SPIDER-VERSE (Halftone + Glitch Offset)
+                // 0. SPIDER-VERSE (Glitch + Halftone Dotted + Tint)
                 if (u_mode == 0) {
                     float offset = u_intensity * 0.05;
                     float r = texture2D(tDiffuse, vec2(uv.x + offset, uv.y)).r;
                     float b = texture2D(tDiffuse, vec2(uv.x - offset, uv.y)).b;
                     vec3 glitch = vec3(r, texColor.g, b);
                     
-                    float luma = getLuma(glitch);
-                    vec2 px = gl_FragCoord.xy / (4.0 - u_intensity * 2.0);
+                    vec2 px = gl_FragCoord.xy / (u_scale * 5.0); // u_scale controla tamaño de puntos
                     float pattern = sin(px.x) * sin(px.y);
-                    float comic = step(pattern, luma * 1.5 - 0.5);
-                    finalColor = mix(vec3(0.02, 0.0, 0.1), glitch, comic + 0.2);
+                    float comic = step(pattern, getLuma(glitch) * 1.5 - 0.5);
+                    
+                    // Mezcla el color base con el tinte seleccionado por el usuario
+                    vec3 tintedGlitch = mix(glitch, glitch * u_color * 1.5, 0.5);
+                    finalColor = mix(vec3(0.02, 0.0, 0.05), tintedGlitch, comic + 0.2);
                 }
                 
-                // 1. DATA MOSH (Fake Pixel Sorting / Smear)
+                // 1. DATA MOSH (Smear + Tinte)
                 else if (u_mode == 1) {
-                    float luma = getLuma(texColor.rgb);
                     if (luma > 0.4 && luma < 0.8) {
-                        uv.y += u_intensity * 0.2 * sin(uv.x * 50.0 + u_time);
-                        finalColor = texture2D(tDiffuse, fract(uv)).rgb;
+                        uv.y += u_intensity * 0.2 * sin(uv.x * (50.0 * u_scale) + u_time);
+                        finalColor = texture2D(tDiffuse, fract(uv)).rgb * u_color;
                     }
                 }
                 
                 // 2. FLUID LIQUIFY
                 else if (u_mode == 2) {
-                    uv.x += sin(uv.y * 10.0 + u_time * 2.0) * 0.05 * u_intensity;
-                    uv.y += cos(uv.x * 10.0 + u_time * 2.0) * 0.05 * u_intensity;
+                    uv.x += sin(uv.y * (10.0 * u_scale) + u_time * 2.0) * 0.05 * u_intensity;
+                    uv.y += cos(uv.x * (10.0 * u_scale) + u_time * 2.0) * 0.05 * u_intensity;
                     finalColor = texture2D(tDiffuse, fract(uv)).rgb;
+                    finalColor = mix(finalColor, finalColor * u_color, u_intensity);
                 }
                 
-                // 3. SOBEL NEON (Edge Detection)
+                // 3. SOBEL NEON (Lineas Neon del color seleccionado)
                 else if (u_mode == 3) {
                     vec2 texel = vec2(1.0 / 1280.0, 1.0 / 720.0) * (u_intensity * 5.0 + 1.0);
                     float s00 = getLuma(texture2D(tDiffuse, uv + texel * vec2(-1, -1)).rgb);
@@ -186,64 +218,65 @@
                     float s02 = getLuma(texture2D(tDiffuse, uv + texel * vec2(-1, 1)).rgb);
                     float s20 = getLuma(texture2D(tDiffuse, uv + texel * vec2(1, -1)).rgb);
                     float edge = abs(s00 - s22) + abs(s02 - s20);
-                    finalColor = mix(vec3(0.0), vec3(0.0, 1.0, 0.8), edge * 5.0); // Cyan Neon
+                    // u_scale controla el grosor/brillo, u_color define el neón
+                    finalColor = mix(vec3(0.0), u_color * (u_scale * 2.0), edge * 5.0); 
                 }
                 
-                // 4. KINETIC PULSE (Audio-Reactive placeholder based on time/intensity)
+                // 4. KINETIC PULSE
                 else if (u_mode == 4) {
                     vec2 center = vec2(0.5);
                     float dist = distance(uv, center);
-                    float pulse = sin(dist * 20.0 - u_time * 5.0) * u_intensity * 0.1;
+                    float pulse = sin(dist * (20.0 * u_scale) - u_time * 5.0) * u_intensity * 0.1;
                     finalColor = texture2D(tDiffuse, uv + (uv - center) * pulse).rgb;
+                    finalColor *= mix(vec3(1.0), u_color, abs(pulse) * 10.0);
                 }
                 
-                // 5. CRT GHOSTING
+                // 5. CRT GHOSTING (Scanlines + Tinte Fosfórico)
                 else if (u_mode == 5) {
-                    float scanline = sin(uv.y * 800.0) * 0.04;
+                    float scanline = sin(uv.y * (800.0 * u_scale)) * 0.04;
                     float r = texture2D(tDiffuse, uv + vec2(u_intensity * 0.01, 0.0)).r;
                     float b = texture2D(tDiffuse, uv - vec2(u_intensity * 0.01, 0.0)).b;
                     finalColor = vec3(r, texColor.g, b) - scanline;
-                    // Vignette
-                    float dist = distance(uv, vec2(0.5));
-                    finalColor *= smoothstep(0.8, 0.2, dist);
+                    finalColor *= mix(vec3(1.0), u_color, 0.5); // Baño de color
                 }
 
                 // 6. CHROMATIC EXTREMA
                 else if (u_mode == 6) {
                     float amt = u_intensity * 0.2;
-                    float r = texture2D(tDiffuse, vec2(uv.x + amt, uv.y - amt)).r;
+                    float r = texture2D(tDiffuse, vec2(uv.x + amt * u_scale, uv.y - amt)).r;
                     float g = texture2D(tDiffuse, uv).g;
-                    float b = texture2D(tDiffuse, vec2(uv.x - amt, uv.y + amt)).b;
-                    finalColor = vec3(r, g, b);
+                    float b = texture2D(tDiffuse, vec2(uv.x - amt * u_scale, uv.y + amt)).b;
+                    finalColor = vec3(r, g, b) * mix(vec3(1.0), u_color, 0.2);
                 }
 
-                // 7. FAKE DEPTH MAP
+                // 7. DEPTH MAP
                 else if (u_mode == 7) {
-                    float luma = getLuma(texColor.rgb);
                     vec2 center = vec2(0.5);
-                    vec2 depthUv = center + (uv - center) * (1.0 - luma * u_intensity * 0.5);
+                    vec2 depthUv = center + (uv - center) * (1.0 - luma * u_intensity * u_scale);
                     finalColor = texture2D(tDiffuse, depthUv).rgb;
+                    finalColor = mix(finalColor, u_color * luma, u_intensity);
                 }
 
                 // 8. ASCII VOID
                 else if (u_mode == 8) {
-                    float pixels = 100.0 - (u_intensity * 50.0);
+                    float pixels = 100.0 / u_scale; // u_scale controla resolución ASCII
                     vec2 pixelatedUv = floor(uv * pixels) / pixels;
-                    vec3 pColor = texture2D(tDiffuse, pixelatedUv).rgb;
-                    float luma = getLuma(pColor);
-                    if(luma < 0.2) finalColor = vec3(0.0);
-                    else if(luma < 0.5) finalColor = vec3(0.1, 0.3, 0.1);
-                    else if(luma < 0.8) finalColor = vec3(0.3, 0.8, 0.3);
-                    else finalColor = vec3(0.8, 1.0, 0.8); // Estilo Matrix
+                    float pLuma = getLuma(texture2D(tDiffuse, pixelatedUv).rgb);
+                    
+                    // Asignamos el color seleccionado a los caracteres
+                    if(pLuma < 0.2) finalColor = vec3(0.0);
+                    else if(pLuma < 0.5) finalColor = u_color * 0.4;
+                    else if(pLuma < 0.8) finalColor = u_color * 0.8;
+                    else finalColor = u_color * 1.5; 
                 }
 
-                // 9. THERMAL PREDATOR
+                // 9. THERMAL PREDATOR (Mapeado a u_color como Base Caliente)
                 else if (u_mode == 9) {
-                    float luma = getLuma(texColor.rgb);
-                    luma = fract(luma + u_intensity * u_time * 0.5); // Animado
+                    luma = fract(luma + u_intensity * u_time * 0.5);
                     vec3 heat;
-                    if (luma < 0.33) heat = mix(vec3(0.0, 0.0, 0.5), vec3(1.0, 0.0, 0.0), luma * 3.0);
-                    else if (luma < 0.66) heat = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), (luma - 0.33) * 3.0);
+                    vec3 cold = vec3(0.0, 0.0, 0.5);
+                    if (luma < 0.33) heat = mix(cold, u_color, luma * 3.0);
+                    else if (luma < 0.66) heat = mix(u_color, vec3(1.0, 1.0, 0.0), (luma - 0.33) * 3.0);
                     else heat = mix(vec3(1.0, 1.0, 0.0), vec3(1.0), (luma - 0.66) * 3.0);
                     finalColor = heat;
                 }
@@ -253,20 +286,19 @@
         `;
 
         // ==========================================
-        // HOST LAYER (PANTALLA)
+        // LÓGICA HOST (PANTALLA)
         // ==========================================
         if (mode !== 'controlador') {
             document.getElementById('ui-layer').style.display = 'flex';
 
             const scene = new THREE.Scene();
-            // Truco: Para encajar un stream 16:9 de celular en una pantalla 16:9, usamos cámara ortográfica
             const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
             const renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('canvas-container').appendChild(renderer.domElement);
 
             const mediaFeed = document.getElementById('media-feed');
-            mediaFeed.play(); // Asegurar que el fallback de Wix ruede
+            mediaFeed.play();
             
             const texCanvas = document.getElementById('texture-canvas');
             const texCtx = texCanvas.getContext('2d', { willReadFrequently: true });
@@ -276,11 +308,14 @@
             videoTexture.minFilter = THREE.LinearFilter;
             videoTexture.magFilter = THREE.LinearFilter;
 
+            const initRgb = hexToRgb(vfxState.color);
             const shaderMat = new THREE.ShaderMaterial({
                 uniforms: {
                     tDiffuse: { value: videoTexture },
                     u_mode: { value: vfxState.mode },
                     u_intensity: { value: vfxState.intensity },
+                    u_scale: { value: vfxState.scale },
+                    u_color: { value: new THREE.Vector3(initRgb.r, initRgb.g, initRgb.b) },
                     u_time: { value: 0.0 }
                 },
                 vertexShader: vertexShader,
@@ -296,21 +331,22 @@
             function animate() {
                 requestAnimationFrame(animate);
                 
-                // Stop-Motion Engine: Controla la lectura del video al canvas
                 if (mediaFeed.readyState >= mediaFeed.HAVE_CURRENT_DATA) {
                     const now = Date.now();
                     const frameInterval = 1000 / vfxState.fps; 
                     if (now - lastDrawTime >= frameInterval) {
-                        // Al dibujarlo en canvas 12 veces por segundo (default), se ve animado a mano
                         texCtx.drawImage(mediaFeed, 0, 0, texCanvas.width, texCanvas.height);
                         videoTexture.needsUpdate = true;
                         lastDrawTime = now;
                     }
                 }
                 
-                // Update Shaders
                 shaderMat.uniforms.u_mode.value = vfxState.mode;
                 shaderMat.uniforms.u_intensity.value = vfxState.intensity;
+                shaderMat.uniforms.u_scale.value = vfxState.scale;
+                
+                const c = hexToRgb(vfxState.color);
+                shaderMat.uniforms.u_color.value.set(c.r, c.g, c.b);
                 shaderMat.uniforms.u_time.value = clock.getElapsedTime();
 
                 renderer.render(scene, camera);
@@ -319,9 +355,7 @@
 
             window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
 
-            // WEBRTC
             peer = new Peer(peerConfig); 
-            
             peer.on('open', (id) => {
                 const url = window.location.href.split('?')[0] + `?modo=controlador&id=${id}`;
                 new QRCode(document.getElementById("qrcode"), {
@@ -335,14 +369,12 @@
                 });
             });
 
-            // CUANDO ENTRA LA CÁMARA DEL CELULAR:
             peer.on('call', (call) => {
                 call.answer(); 
                 document.getElementById('host-status').innerText = "VFX ENGINE: STREAM EN VIVO INTERCEPTADO";
                 document.getElementById('host-status').classList.add('text-sgxYellow');
                 
                 call.on('stream', (remoteStream) => {
-                    // Magia aquí: Reemplazamos el video de loop por la cámara sin tocar WebGL
                     mediaFeed.srcObject = remoteStream;
                     mediaFeed.play();
                 });
@@ -350,7 +382,7 @@
         } 
         
         // ==========================================
-        // CELULAR LAYER (REMOTO)
+        // LÓGICA CELULAR (REMOTO)
         // ==========================================
         else if (mode === 'controlador' && hostId) {
             document.getElementById('controller-ui').style.display = 'flex';
@@ -359,7 +391,6 @@
             document.getElementById('btn-activar').addEventListener('click', async (e) => {
                 e.target.innerText = "INICIALIZANDO...";
                 try {
-                    // Config para portrait ratio
                     localStream = await navigator.mediaDevices.getUserMedia({
                         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
                     });
@@ -378,32 +409,36 @@
                 });
             }
 
-            // Lógica UI Controles
             const uiFPS = document.getElementById('sl-fps');
             const uiInt = document.getElementById('sl-int');
+            const uiScale = document.getElementById('sl-scale');
+            const uiColor = document.getElementById('in-color');
             const btns = document.querySelectorAll('.effect-btn');
 
             const sendData = () => {
                 vfxState.fps = parseInt(uiFPS.value);
                 vfxState.intensity = parseFloat(uiInt.value);
+                vfxState.scale = parseFloat(uiScale.value);
+                vfxState.color = uiColor.value;
+                
                 document.getElementById('val-fps').innerText = vfxState.fps;
                 document.getElementById('val-int').innerText = vfxState.intensity.toFixed(2);
+                document.getElementById('val-scale').innerText = vfxState.scale.toFixed(2);
+                document.getElementById('val-c').innerText = vfxState.color.toUpperCase();
                 
                 if(dataConnection && dataConnection.open) {
                     dataConnection.send({ type: 'vfx', state: vfxState });
                 }
             };
 
-            uiFPS.addEventListener('input', sendData);
-            uiInt.addEventListener('input', sendData);
+            [uiFPS, uiInt, uiScale, uiColor].forEach(el => el.addEventListener('input', sendData));
 
             btns.forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     btns.forEach(b => b.classList.remove('active'));
-                    e.target.classList.add('active');
-                    vfxState.mode = parseInt(e.target.dataset.mode);
+                    e.currentTarget.classList.add('active');
+                    vfxState.mode = parseInt(e.currentTarget.dataset.mode);
                     sendData();
-                    // Feedback Haptico para tu cerebro
                     if(navigator.vibrate) navigator.vibrate(20); 
                 });
             });
