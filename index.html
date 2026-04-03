@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SGX Visualizer | Spider-Verse PoC</title>
+    <title>SGX Visualizer | Dimension Engine</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,8 +17,7 @@
                     fontFamily: { sans: ['Rajdhani', 'sans-serif'] },
                     colors: {
                         sgxBlue: '#32527B', sgxYellow: '#FDCC0D',
-                        sgxCopper: '#B87333', sgxDark: '#010409',
-                        sgxPanel: 'rgba(2, 8, 15, 0.75)'
+                        sgxDark: '#010409', sgxPanel: 'rgba(2, 8, 15, 0.85)'
                     }
                 }
             }
@@ -30,102 +29,88 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; background-color: #010409; color: #FDCC0D; background-image: radial-gradient(circle at center, #021124 0%, #010409 100%); user-select: none; }
+        body { margin: 0; overflow: hidden; background-color: #010409; color: #FDCC0D; user-select: none; }
         #canvas-container { position: absolute; width: 100vw; height: 100vh; z-index: 0; }
-        .sgx-panel { background: rgba(2, 8, 15, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(50, 82, 123, 0.5); border-left: 4px solid #FDCC0D; border-radius: 1.5rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); }
+        
+        .sgx-panel { background: rgba(2, 8, 15, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(50, 82, 123, 0.5); border-left: 4px solid #FDCC0D; border-radius: 1rem; }
         .sgx-glow { text-shadow: 0 0 10px rgba(253, 204, 13, 0.6); }
         
-        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin: 4px 0; height: 12px; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #FDCC0D; cursor: pointer; margin-top: -5px; box-shadow: 0 0 8px #FDCC0D; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #32527B; border-radius: 2px; }
-        input[type="color"] { -webkit-appearance: none; border: none; padding: 0; width: 100%; height: 20px; cursor: pointer; background: transparent; border-radius: 8px; }
-        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        input[type="color"]::-webkit-color-swatch { border: 1px solid #32527B; border-radius: 8px; }
-
-        #ui-layer, #controller-ui, #loading-screen { display: none; z-index: 10; position: relative; }
-        .spinner { border: 3px solid rgba(50, 82, 123, 0.3); border-top: 3px solid #FDCC0D; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Controles móviles optimizados */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; height: 16px; margin: 5px 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #FDCC0D; box-shadow: 0 0 10px #FDCC0D; cursor: pointer; margin-top: -8px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #32527B; border-radius: 2px; }
         
-        /* Video oculto para procesar el stream */
-        video { display: none; }
+        .effect-btn { background: rgba(50, 82, 123, 0.2); border: 1px solid #32527B; padding: 8px; font-size: 10px; font-weight: bold; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: white; }
+        .effect-btn.active { background: #FDCC0D; color: #010409; box-shadow: 0 0 10px rgba(253,204,13,0.5); border-color: #FDCC0D; }
+
+        #media-feed { display: none; }
     </style>
 </head>
 <body>
 
     <div id="canvas-container"></div>
-    <video id="remote-video" autoplay playsinline></video>
+    
+    <video id="media-feed" src="https://video.wixstatic.com/video/fe81a7_056f6ceeb6744f94991016499cfd95ae/1080p/mp4/file.mp4" loop autoplay muted playsinline crossorigin="anonymous"></video>
     <canvas id="texture-canvas" style="display:none;"></canvas>
 
-    <div id="loading-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-sgxDark z-50">
-        <div class="spinner mb-4"></div>
-        <h2 class="text-2xl font-bold tracking-widest sgx-glow uppercase">INICIANDO NÚCLEO XR...</h2>
-    </div>
-
-    <div id="ui-layer" class="w-full h-screen p-4 flex flex-col justify-between pointer-events-none">
-        <div class="flex justify-between items-start">
-            <div class="sgx-panel p-3 pr-8 pointer-events-auto flex items-center gap-3">
-                <div>
-                    <h1 class="text-2xl font-bold sgx-glow tracking-[0.1em] uppercase">SPATIALGINEERS</h1>
-                    <p class="text-[10px] tracking-widest text-sgxBlue uppercase font-bold">VFX Engine | Spider-Verse</p>
-                </div>
-            </div>
-            <div id="connection-status" class="sgx-panel px-5 py-2 text-[10px] font-bold tracking-widest flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full bg-sgxCopper animate-ping"></div>
-                <span>ESPERANDO FEED DE VIDEO...</span>
-            </div>
-        </div>
-
-        <div class="flex justify-between items-end w-full pointer-events-auto flex-grow my-2">
-            <div class="flex flex-col items-end gap-3 h-full justify-end w-full">
-                <div class="sgx-panel p-3 flex flex-col items-center">
-                    <div class="bg-white p-2 rounded-xl mb-2 border border-sgxBlue">
-                        <div id="qrcode"></div>
-                    </div>
-                    <p id="qr-instruction" class="font-bold text-[10px] tracking-widest text-center text-sgxYellow">ESCANEA PARA<br>ENVIAR CÁMARA</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="controller-ui" class="w-full min-h-screen bg-sgxDark flex flex-col items-center p-4 overflow-y-auto">
-        <div class="sgx-panel w-full p-4 flex items-center justify-center gap-3 mb-4 mt-2">
-            <div class="text-left">
-                <h2 class="text-xl font-bold sgx-glow tracking-widest uppercase">SGX REMOTE CAM</h2>
-                <p id="remote-status" class="text-[10px] text-sgxBlue font-bold tracking-widest">CONECTANDO...</p>
-            </div>
-        </div>
+    <div id="ui-layer" class="hidden w-full h-screen p-6 flex-col justify-between pointer-events-none absolute inset-0 z-10">
         
-        <div id="setup-section" class="flex flex-col items-center justify-center w-full max-w-sm mt-8">
-            <button id="btn-activar" class="w-full bg-sgxYellow text-sgxDark font-bold text-base py-4 rounded-2xl mb-3 hover:scale-105 active:scale-95 transition shadow-[0_0_15px_#FDCC0D]">
-                INICIAR TRANSMISIÓN EN VIVO
-            </button>
+        <div class="flex justify-between items-start">
+            <div class="sgx-panel p-4 pointer-events-auto">
+                <h1 class="text-2xl font-bold sgx-glow tracking-[0.1em] uppercase">SPATIALGINEERS</h1>
+                <p class="text-[10px] tracking-widest text-sgxBlue font-bold" id="host-status">VFX ENGINE: ESPERANDO ENLACE P2P...</p>
+            </div>
         </div>
 
-        <div id="active-section" class="hidden flex-col items-center w-full max-w-sm gap-4 pb-8">
+        <div class="flex justify-end items-end w-full">
+            <div class="sgx-panel p-4 flex flex-col items-center shadow-2xl pointer-events-auto">
+                <div class="bg-white p-2 rounded-lg mb-2">
+                    <div id="qrcode"></div>
+                </div>
+                <p class="font-bold text-[11px] tracking-widest text-center text-sgxYellow">ESCANEA PARA CRUZAR<br>LA DIMENSIÓN</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="controller-ui" class="hidden w-full h-[100dvh] bg-sgxDark flex-col relative overflow-hidden">
+        
+        <div class="w-full h-[55%] bg-black relative">
+            <video id="local-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+            <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] px-2 py-1 rounded font-bold animate-pulse" id="live-indicator" style="display:none;">LIVE P2P</div>
             
-            <div class="w-full h-40 bg-black rounded-xl overflow-hidden border-2 border-sgxBlue mb-4 relative">
-                <video id="local-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
-                <div class="absolute top-2 left-2 bg-red-600 text-white text-[8px] px-2 py-1 rounded font-bold animate-pulse">LIVE</div>
+            <div id="setup-section" class="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
+                <button id="btn-activar" class="bg-sgxYellow text-sgxDark font-bold text-lg px-8 py-4 rounded-full hover:scale-105 active:scale-95 transition shadow-[0_0_20px_#FDCC0D]">
+                    INICIAR TRANSMISIÓN
+                </button>
+            </div>
+        </div>
+
+        <div class="w-full h-[45%] sgx-panel rounded-t-3xl -mt-6 z-10 p-5 flex flex-col gap-4 overflow-y-auto">
+            
+            <div>
+                <h3 class="text-[10px] font-bold tracking-widest text-sgxYellow uppercase mb-2">Motor de Efectos (Ubershader)</h3>
+                <div class="grid grid-cols-5 gap-2" id="effect-grid">
+                    <div class="effect-btn active" data-mode="0">SPIDER<br>VERSE</div>
+                    <div class="effect-btn" data-mode="1">DATA<br>MOSH</div>
+                    <div class="effect-btn" data-mode="2">FLUID<br>LIQUIFY</div>
+                    <div class="effect-btn" data-mode="3">SOBEL<br>NEON</div>
+                    <div class="effect-btn" data-mode="4">KINETIC<br>PULSE</div>
+                    <div class="effect-btn" data-mode="5">CRT<br>GHOST</div>
+                    <div class="effect-btn" data-mode="6">CHROMA<br>EXTREM</div>
+                    <div class="effect-btn" data-mode="7">DEPTH<br>MAP</div>
+                    <div class="effect-btn" data-mode="8">ASCII<br>VOID</div>
+                    <div class="effect-btn" data-mode="9">THERMAL<br>PRED</div>
+                </div>
             </div>
 
-            <div class="sgx-panel p-4 w-full flex flex-col gap-4">
-                <h3 class="text-xs font-bold tracking-widest text-sgxYellow uppercase mb-1 border-b border-sgxBlue pb-1">Shader Overrides</h3>
-                
+            <div class="flex-grow flex flex-col justify-center gap-3">
                 <div>
-                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>FRAMERATE (STOP-MOTION)</label><span id="rem-val-fps">12 FPS</span></div>
-                    <input type="range" id="rem-sl-fps" min="2" max="60" step="1" value="12">
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>STOP-MOTION (FPS)</label><span id="val-fps">12</span></div>
+                    <input type="range" id="sl-fps" min="2" max="60" step="1" value="12">
                 </div>
                 <div>
-                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>GLITCH (ABERRACIÓN)</label><span id="rem-val-glitch">0.3</span></div>
-                    <input type="range" id="rem-sl-glitch" min="0" max="1" step="0.01" value="0.3">
-                </div>
-                <div>
-                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>HALFTONE (PUNTOS CÓMIC)</label><span id="rem-val-halftone">3.0</span></div>
-                    <input type="range" id="rem-sl-halftone" min="1" max="10" step="0.1" value="3.0">
-                </div>
-                <div>
-                    <div class="flex justify-between text-[10px] font-bold mb-1"><label>TINT COLOR</label><span id="rem-val-c">#FFFFFF</span></div>
-                    <input type="color" id="rem-in-color" value="#ffffff">
+                    <div class="flex justify-between text-[11px] font-bold mb-1"><label>INTENSIDAD / ABERRACIÓN</label><span id="val-int">0.5</span></div>
+                    <input type="range" id="sl-int" min="0" max="1" step="0.01" value="0.5">
                 </div>
             </div>
         </div>
@@ -136,251 +121,292 @@
         const mode = urlParams.get('modo');
         const hostId = urlParams.get('id');
 
-        const peerConfig = {
-            debug: 2,
-            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
-        };
-
+        const peerConfig = { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] } };
         let peer = null;
         let dataConnection = null;
         
-        // Parámetros del Shader iniciales
-        let vfxParams = { fps: 12, glitch: 0.3, halftone: 3.0, c: '#ffffff' };
+        let vfxState = { mode: 0, fps: 12, intensity: 0.5 };
 
-        // Shaders GLSL (El corazón del efecto Spider-Verse)
+        // --- UBERSHADER: 10 Efectos Matemáticos en un solo pase ---
         const vertexShader = `
             varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
+            void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
         `;
 
         const fragmentShader = `
             uniform sampler2D tDiffuse;
-            uniform float u_glitch;
-            uniform float u_halftone;
-            uniform vec3 u_tint;
+            uniform int u_mode;
+            uniform float u_intensity;
+            uniform float u_time;
             varying vec2 vUv;
+
+            // Función Helper RGB a Luma
+            float getLuma(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.114)); }
 
             void main() {
                 vec2 uv = vUv;
-                
-                // 1. Aberración Cromática Direccional (Glitch)
-                float offset = u_glitch * 0.05;
-                float r = texture2D(tDiffuse, vec2(uv.x + offset, uv.y - offset*0.5)).r;
-                float g = texture2D(tDiffuse, uv).g;
-                float b = texture2D(tDiffuse, vec2(uv.x - offset, uv.y + offset*0.5)).b;
-                vec3 color = vec3(r, g, b) * u_tint;
+                vec4 texColor = texture2D(tDiffuse, uv);
+                vec3 finalColor = texColor.rgb;
 
-                // 2. Halftone (Dots estilo cómic)
-                // Usamos luma para determinar brillo
-                float luma = dot(color, vec3(0.299, 0.587, 0.114));
+                // 0. SPIDER-VERSE (Halftone + Glitch Offset)
+                if (u_mode == 0) {
+                    float offset = u_intensity * 0.05;
+                    float r = texture2D(tDiffuse, vec2(uv.x + offset, uv.y)).r;
+                    float b = texture2D(tDiffuse, vec2(uv.x - offset, uv.y)).b;
+                    vec3 glitch = vec3(r, texColor.g, b);
+                    
+                    float luma = getLuma(glitch);
+                    vec2 px = gl_FragCoord.xy / (4.0 - u_intensity * 2.0);
+                    float pattern = sin(px.x) * sin(px.y);
+                    float comic = step(pattern, luma * 1.5 - 0.5);
+                    finalColor = mix(vec3(0.02, 0.0, 0.1), glitch, comic + 0.2);
+                }
                 
-                // Coordenadas de pantalla para los puntos
-                vec2 px = gl_FragCoord.xy / u_halftone;
-                float pattern = sin(px.x) * sin(px.y);
+                // 1. DATA MOSH (Fake Pixel Sorting / Smear)
+                else if (u_mode == 1) {
+                    float luma = getLuma(texColor.rgb);
+                    if (luma > 0.4 && luma < 0.8) {
+                        uv.y += u_intensity * 0.2 * sin(uv.x * 50.0 + u_time);
+                        finalColor = texture2D(tDiffuse, fract(uv)).rgb;
+                    }
+                }
                 
-                // Hacemos el step con contraste duro
-                float threshold = luma * 1.5;
-                float comic = step(pattern, threshold - 0.5);
+                // 2. FLUID LIQUIFY
+                else if (u_mode == 2) {
+                    uv.x += sin(uv.y * 10.0 + u_time * 2.0) * 0.05 * u_intensity;
+                    uv.y += cos(uv.x * 10.0 + u_time * 2.0) * 0.05 * u_intensity;
+                    finalColor = texture2D(tDiffuse, fract(uv)).rgb;
+                }
                 
-                // Mezcla: Sombras se vuelven puntos negros, luces mantienen el color glitcheado
-                vec3 finalColor = mix(vec3(0.05, 0.05, 0.1), color, comic + 0.3);
+                // 3. SOBEL NEON (Edge Detection)
+                else if (u_mode == 3) {
+                    vec2 texel = vec2(1.0 / 1280.0, 1.0 / 720.0) * (u_intensity * 5.0 + 1.0);
+                    float s00 = getLuma(texture2D(tDiffuse, uv + texel * vec2(-1, -1)).rgb);
+                    float s22 = getLuma(texture2D(tDiffuse, uv + texel * vec2(1, 1)).rgb);
+                    float s02 = getLuma(texture2D(tDiffuse, uv + texel * vec2(-1, 1)).rgb);
+                    float s20 = getLuma(texture2D(tDiffuse, uv + texel * vec2(1, -1)).rgb);
+                    float edge = abs(s00 - s22) + abs(s02 - s20);
+                    finalColor = mix(vec3(0.0), vec3(0.0, 1.0, 0.8), edge * 5.0); // Cyan Neon
+                }
+                
+                // 4. KINETIC PULSE (Audio-Reactive placeholder based on time/intensity)
+                else if (u_mode == 4) {
+                    vec2 center = vec2(0.5);
+                    float dist = distance(uv, center);
+                    float pulse = sin(dist * 20.0 - u_time * 5.0) * u_intensity * 0.1;
+                    finalColor = texture2D(tDiffuse, uv + (uv - center) * pulse).rgb;
+                }
+                
+                // 5. CRT GHOSTING
+                else if (u_mode == 5) {
+                    float scanline = sin(uv.y * 800.0) * 0.04;
+                    float r = texture2D(tDiffuse, uv + vec2(u_intensity * 0.01, 0.0)).r;
+                    float b = texture2D(tDiffuse, uv - vec2(u_intensity * 0.01, 0.0)).b;
+                    finalColor = vec3(r, texColor.g, b) - scanline;
+                    // Vignette
+                    float dist = distance(uv, vec2(0.5));
+                    finalColor *= smoothstep(0.8, 0.2, dist);
+                }
+
+                // 6. CHROMATIC EXTREMA
+                else if (u_mode == 6) {
+                    float amt = u_intensity * 0.2;
+                    float r = texture2D(tDiffuse, vec2(uv.x + amt, uv.y - amt)).r;
+                    float g = texture2D(tDiffuse, uv).g;
+                    float b = texture2D(tDiffuse, vec2(uv.x - amt, uv.y + amt)).b;
+                    finalColor = vec3(r, g, b);
+                }
+
+                // 7. FAKE DEPTH MAP
+                else if (u_mode == 7) {
+                    float luma = getLuma(texColor.rgb);
+                    vec2 center = vec2(0.5);
+                    vec2 depthUv = center + (uv - center) * (1.0 - luma * u_intensity * 0.5);
+                    finalColor = texture2D(tDiffuse, depthUv).rgb;
+                }
+
+                // 8. ASCII VOID
+                else if (u_mode == 8) {
+                    float pixels = 100.0 - (u_intensity * 50.0);
+                    vec2 pixelatedUv = floor(uv * pixels) / pixels;
+                    vec3 pColor = texture2D(tDiffuse, pixelatedUv).rgb;
+                    float luma = getLuma(pColor);
+                    if(luma < 0.2) finalColor = vec3(0.0);
+                    else if(luma < 0.5) finalColor = vec3(0.1, 0.3, 0.1);
+                    else if(luma < 0.8) finalColor = vec3(0.3, 0.8, 0.3);
+                    else finalColor = vec3(0.8, 1.0, 0.8); // Estilo Matrix
+                }
+
+                // 9. THERMAL PREDATOR
+                else if (u_mode == 9) {
+                    float luma = getLuma(texColor.rgb);
+                    luma = fract(luma + u_intensity * u_time * 0.5); // Animado
+                    vec3 heat;
+                    if (luma < 0.33) heat = mix(vec3(0.0, 0.0, 0.5), vec3(1.0, 0.0, 0.0), luma * 3.0);
+                    else if (luma < 0.66) heat = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), (luma - 0.33) * 3.0);
+                    else heat = mix(vec3(1.0, 1.0, 0.0), vec3(1.0), (luma - 0.66) * 3.0);
+                    finalColor = heat;
+                }
 
                 gl_FragColor = vec4(finalColor, 1.0);
             }
         `;
 
         // ==========================================
-        // MODO PANTALLA (RECIBE VIDEO Y RENDERIZA)
+        // HOST LAYER (PANTALLA)
         // ==========================================
         if (mode !== 'controlador') {
             document.getElementById('ui-layer').style.display = 'flex';
-            document.getElementById('loading-screen').style.display = 'none';
 
-            // Setup Three.js para 2D Post-processing
             const scene = new THREE.Scene();
-            // Cámara ortográfica plana para llenar la pantalla
+            // Truco: Para encajar un stream 16:9 de celular en una pantalla 16:9, usamos cámara ortográfica
             const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
             const renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            // Textura intermedia para controlar los FPS (El truco del Stop-Motion)
-            const videoEl = document.getElementById('remote-video');
+            const mediaFeed = document.getElementById('media-feed');
+            mediaFeed.play(); // Asegurar que el fallback de Wix ruede
+            
             const texCanvas = document.getElementById('texture-canvas');
             const texCtx = texCanvas.getContext('2d', { willReadFrequently: true });
+            texCanvas.width = 1280; texCanvas.height = 720;
             
-            // Forzamos tamaño de procesamiento a 720p para rendimiento
-            texCanvas.width = 1280; 
-            texCanvas.height = 720;
             const videoTexture = new THREE.CanvasTexture(texCanvas);
             videoTexture.minFilter = THREE.LinearFilter;
             videoTexture.magFilter = THREE.LinearFilter;
 
-            // Material Custom Shader
             const shaderMat = new THREE.ShaderMaterial({
                 uniforms: {
                     tDiffuse: { value: videoTexture },
-                    u_glitch: { value: vfxParams.glitch },
-                    u_halftone: { value: vfxParams.halftone },
-                    u_tint: { value: new THREE.Color(vfxParams.c) }
+                    u_mode: { value: vfxState.mode },
+                    u_intensity: { value: vfxState.intensity },
+                    u_time: { value: 0.0 }
                 },
                 vertexShader: vertexShader,
                 fragmentShader: fragmentShader
             });
 
-            // Geometría que ocupa toda la pantalla
-            const planeGeometry = new THREE.PlaneGeometry(2, 2);
-            const plane = new THREE.Mesh(planeGeometry, shaderMat);
+            const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), shaderMat);
             scene.add(plane);
 
-            // Render Loop con Quantización de Tiempo (Stop-Motion Engine)
             let lastDrawTime = 0;
+            const clock = new THREE.Clock();
             
             function animate() {
                 requestAnimationFrame(animate);
                 
-                // Si tenemos video, dibujamos en el canvas solo N veces por segundo
-                if (videoEl.readyState >= videoEl.HAVE_CURRENT_DATA) {
+                // Stop-Motion Engine: Controla la lectura del video al canvas
+                if (mediaFeed.readyState >= mediaFeed.HAVE_CURRENT_DATA) {
                     const now = Date.now();
-                    const frameInterval = 1000 / vfxParams.fps; // Ej: 1000/12 = 83ms
-                    
+                    const frameInterval = 1000 / vfxState.fps; 
                     if (now - lastDrawTime >= frameInterval) {
-                        // Al dibujarlo en canvas y no usar el video directo, CONGELAMOS la imagen (Stop-Motion)
-                        texCtx.drawImage(videoEl, 0, 0, texCanvas.width, texCanvas.height);
+                        // Al dibujarlo en canvas 12 veces por segundo (default), se ve animado a mano
+                        texCtx.drawImage(mediaFeed, 0, 0, texCanvas.width, texCanvas.height);
                         videoTexture.needsUpdate = true;
                         lastDrawTime = now;
                     }
                 }
                 
-                // Actualizar uniforms de shaders
-                shaderMat.uniforms.u_glitch.value = vfxParams.glitch;
-                shaderMat.uniforms.u_halftone.value = vfxParams.halftone;
-                shaderMat.uniforms.u_tint.value.set(vfxParams.c);
+                // Update Shaders
+                shaderMat.uniforms.u_mode.value = vfxState.mode;
+                shaderMat.uniforms.u_intensity.value = vfxState.intensity;
+                shaderMat.uniforms.u_time.value = clock.getElapsedTime();
 
                 renderer.render(scene, camera);
             }
             animate();
 
-            window.addEventListener('resize', () => {
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+            window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
 
-            // WEBRTC HOST
+            // WEBRTC
             peer = new Peer(peerConfig); 
-            const statusDisplay = document.getElementById('connection-status');
             
             peer.on('open', (id) => {
-                const cleanUrl = window.location.href.split('?')[0].split('#')[0];
-                const remoteUrl = `${cleanUrl}?modo=controlador&id=${id}`;
+                const url = window.location.href.split('?')[0] + `?modo=controlador&id=${id}`;
                 new QRCode(document.getElementById("qrcode"), {
-                    text: remoteUrl, width: 120, height: 120,
-                    colorDark : "#32527B", colorLight : "#ffffff"
+                    text: url, width: 120, height: 120, colorDark : "#32527B", colorLight : "#ffffff"
                 });
             });
 
-            // Recibir Datos (Controles de Shader)
             peer.on('connection', (conn) => {
-                dataConnection = conn;
                 conn.on('data', (data) => {
-                    if (data.type === 'vfxUpdate') {
-                        vfxParams = data.params;
-                    }
+                    if (data.type === 'vfx') vfxState = data.state;
                 });
             });
 
-            // Recibir Video Media (La Cámara en vivo)
+            // CUANDO ENTRA LA CÁMARA DEL CELULAR:
             peer.on('call', (call) => {
-                call.answer(); // Aceptamos la llamada automática
-                statusDisplay.innerHTML = '<div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div> <span class="text-green-500">FEED RECIBIDO</span>';
-                document.getElementById('qr-instruction').innerText = "VFX ENGINE ACTIVO";
-
+                call.answer(); 
+                document.getElementById('host-status').innerText = "VFX ENGINE: STREAM EN VIVO INTERCEPTADO";
+                document.getElementById('host-status').classList.add('text-sgxYellow');
+                
                 call.on('stream', (remoteStream) => {
-                    videoEl.srcObject = remoteStream;
-                    videoEl.play();
+                    // Magia aquí: Reemplazamos el video de loop por la cámara sin tocar WebGL
+                    mediaFeed.srcObject = remoteStream;
+                    mediaFeed.play();
                 });
             });
         } 
         
         // ==========================================
-        // MODO CELULAR (ENVÍA VIDEO Y DATOS)
+        // CELULAR LAYER (REMOTO)
         // ==========================================
         else if (mode === 'controlador' && hostId) {
-            document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('controller-ui').style.display = 'flex';
-
-            const statusText = document.getElementById('remote-status');
             let localStream = null;
 
             document.getElementById('btn-activar').addEventListener('click', async (e) => {
-                e.target.innerText = "ACCEDIENDO A CÁMARA...";
-                e.target.disabled = true;
-
+                e.target.innerText = "INICIALIZANDO...";
                 try {
-                    // Pedir cámara trasera (environment)
+                    // Config para portrait ratio
                     localStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-                        audio: false // Para un visualizer no enviamos audio para no laguear
+                        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
                     });
-                    
                     document.getElementById('local-video').srcObject = localStream;
+                    document.getElementById('setup-section').style.display = 'none';
+                    document.getElementById('live-indicator').style.display = 'block';
                     initRemote();
-
-                } catch (err) {
-                    alert("Error accediendo a la cámara. Asegúrate de estar en HTTPS.");
-                    console.error(err);
-                    e.target.innerText = "ERROR DE CÁMARA";
-                }
+                } catch (err) { alert("Acepta los permisos de cámara en HTTPS."); }
             });
 
             function initRemote() {
-                statusText.innerText = "CONECTANDO CON PANTALLA...";
                 peer = new Peer(peerConfig);
-                
                 peer.on('open', () => {
-                    // 1. Abrir Canal de Datos (Sliders)
                     dataConnection = peer.connect(hostId, { reliable: true });
-                    
-                    // 2. Llamar y enviar Stream de Video
-                    const call = peer.call(hostId, localStream);
-                    
-                    dataConnection.on('open', () => {
-                        document.getElementById('setup-section').style.display = 'none'; 
-                        document.getElementById('active-section').style.display = 'flex';
-                        statusText.innerText = "TRANSMISIÓN ESTABLECIDA"; 
-                        statusText.classList.add('text-green-500');
-                    });
+                    peer.call(hostId, localStream);
                 });
             }
 
-            // UI del Teléfono -> Envía datos al Shader
-            const uiFPS = document.getElementById('rem-sl-fps');
-            const uiGlitch = document.getElementById('rem-sl-glitch');
-            const uiHalftone = document.getElementById('rem-sl-halftone');
-            const uiColor = document.getElementById('rem-in-color');
+            // Lógica UI Controles
+            const uiFPS = document.getElementById('sl-fps');
+            const uiInt = document.getElementById('sl-int');
+            const btns = document.querySelectorAll('.effect-btn');
 
-            const sendVFXUpdate = () => {
-                const p = {
-                    fps: parseInt(uiFPS.value),
-                    glitch: parseFloat(uiGlitch.value),
-                    halftone: parseFloat(uiHalftone.value),
-                    c: uiColor.value
-                };
+            const sendData = () => {
+                vfxState.fps = parseInt(uiFPS.value);
+                vfxState.intensity = parseFloat(uiInt.value);
+                document.getElementById('val-fps').innerText = vfxState.fps;
+                document.getElementById('val-int').innerText = vfxState.intensity.toFixed(2);
                 
-                // Actualizar textos en el teléfono
-                document.getElementById('rem-val-fps').innerText = p.fps + " FPS";
-                document.getElementById('rem-val-glitch').innerText = p.glitch.toFixed(2);
-                document.getElementById('rem-val-halftone').innerText = p.halftone.toFixed(1);
-                document.getElementById('rem-val-c').innerText = p.c.toUpperCase();
-
                 if(dataConnection && dataConnection.open) {
-                    dataConnection.send({ type: 'vfxUpdate', params: p });
+                    dataConnection.send({ type: 'vfx', state: vfxState });
                 }
             };
 
-            [uiFPS, uiGlitch, uiHalftone, uiColor].forEach(el => el.addEventListener('input', sendVFXUpdate));
+            uiFPS.addEventListener('input', sendData);
+            uiInt.addEventListener('input', sendData);
+
+            btns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    btns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    vfxState.mode = parseInt(e.target.dataset.mode);
+                    sendData();
+                    // Feedback Haptico para tu cerebro
+                    if(navigator.vibrate) navigator.vibrate(20); 
+                });
+            });
         }
     </script>
 </body>
